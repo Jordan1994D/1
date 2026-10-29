@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bgplay</title>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #efede7;
+    --text: #1d1c1a;
+    --muted: #6b6862;
+    --border: #e2dfd8;
+    --accent: #c4472d;
+    --accent-text: #ffffff;
+    --danger: #a3261b;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151413;
+      --surface: #1f1e1c;
+      --surface-2: #2a2926;
+      --text: #ecebe7;
+      --muted: #9a978f;
+      --border: #34322e;
+      --accent: #e8664a;
+      --accent-text: #151413;
+      --danger: #f07a6c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .pill { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: #3a9b5c; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+
+  .title { font-size: 17px; font-weight: 600; margin: 0 0 4px; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0; }
+  .progress { margin: 16px 0 4px; }
+  .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 14px 0 6px; }
+  button {
+    font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.icon { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+  button.play { width: 60px; height: 60px; background: var(--accent); color: var(--accent-text); border: none; }
+  button.primary { background: var(--accent); color: var(--accent-text); border: none; }
+  button.toggle[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  button.danger { color: var(--danger); }
+  svg { width: 20px; height: 20px; fill: currentColor; }
+  .play svg { width: 26px; height: 26px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row.spread { justify-content: space-between; }
+  .vol { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 180px; }
+  .vol span { font-size: 12px; color: var(--muted); width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  textarea {
+    width: 100%; min-height: 72px; resize: vertical; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hint { font-size: 12px; color: var(--muted); }
+  label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+
+  ol { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-top: 1px solid var(--border); }
+  li:first-child { border-top: none; }
+  li .n { width: 22px; color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  li.current .t { color: var(--accent); font-weight: 600; }
+  li button { padding: 4px 8px; font-size: 12px; }
+  .empty { color: var(--muted); text-align: center; padding: 14px 0; margin: 0; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px;
+    font-size: 14px; max-width: calc(100% - 32px); opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>bg<span>play</span></h1>
+    <span class="pill"><span class="dot" id="dot"></span><span id="conn">connecting…</span></span>
+  </header>
+
+  <section class="card" id="offline" hidden>
+    <h2>Player</h2>
+    <p class="sub" style="margin-bottom:14px">The player isn't running. Start it, or just add a video below.</p>
+    <div class="row">
+      <button class="primary" id="startBtn">Start player</button>
+      <label class="check"><input type="checkbox" id="videoMode"> Show video window</label>
+    </div>
+  </section>
+
+  <section class="card" id="nowPlaying" hidden>
+    <h2>Now playing</h2>
+    <p class="title" id="title">Nothing queued</p>
+    <p class="sub" id="trackInfo"></p>
+
+    <div class="progress">
+      <input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Seek">
+      <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="icon" id="prevBtn" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+      <button class="icon play" id="playBtn" aria-label="Play or pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="icon" id="nextBtn" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+    </div>
+
+    <div class="row spread" style="margin-top:12px">
+      <div class="vol">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+        <input type="range" id="volume" min="0" max="130" step="1" value="100" aria-label="Volume">
+        <span id="volLabel">100</span>
+      </div>
+      <div class="row">
+        <button class="toggle" id="loopBtn" aria-pressed="false">Loop</button>
+        <button id="shuffleBtn">Shuffle</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Add videos</h2>
+    <form id="addForm">
+      <textarea id="urls" placeholder="https://www.bitchute.com/video/…&#10;One link per line"></textarea>
+      <div class="row spread" style="margin-top:10px">
+        <span class="hint">Paste one or more BitChute links.</span>
+        <button class="primary" type="submit" id="addBtn">Add to queue</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" id="queueCard" hidden>
+    <div class="row spread" style="margin-bottom:6px">
+      <h2 style="margin:0">Queue <span id="qCount"></span></h2>
+      <div class="row">
+        <button id="clearBtn">Clear</button>
+        <button class="danger" id="stopBtn">Stop player</button>
+      </div>
+    </div>
+    <ol id="queue"></ol>
+    <p class="empty" id="qEmpty">The queue is empty.</p>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const PLAY = '<path d="M8 5v14l11-7z"/>';
+const PAUSE = '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>';
+let state = { running: false };
+let seeking = false, volDragging = false, toastTimer;
+
+function fmt(s) {
+  if (s == null || isNaN(s)) return "0:00";
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+async function send(action, extra = {}) {
+  try {
+    const r = await fetch("/api/cmd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    render(data);
+    return true;
+  } catch (e) {
+    toast(e.message);
+    return false;
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    render(await r.json());
+    $("dot").classList.add("on");
+    $("conn").textContent = state.running ? "player running" : "player stopped";
+  } catch {
+    $("dot").classList.remove("on");
+    $("conn").textContent = "web server offline";
+  }
+}
+
+function render(s) {
+  state = s;
+  $("offline").hidden = s.running;
+  $("nowPlaying").hidden = !s.running;
+  $("queueCard").hidden = !s.running;
+  if (!s.running) return;
+
+  const queue = s.queue || [];
+  const idx = queue.findIndex((q) => q.current);
+  const playing = idx >= 0 && !s.idle;
+
+  $("title").textContent = playing ? (s.title || "Loading…") : "Nothing playing";
+  $("trackInfo").textContent = playing
+    ? `Track ${idx + 1} of ${queue.length}${s.paused ? " · paused" : ""}`
+    : queue.length ? "Pick a track from the queue" : "Add a video to get started";
+
+  if (!seeking) {
+    $("seek").max = Math.floor(s.duration || 0);
+    $("seek").value = Math.floor(s.position || 0);
+    $("pos").textContent = fmt(s.position);
+  }
+  $("dur").textContent = fmt(s.duration);
+  $("seek").disabled = !playing || !s.duration;
+
+  $("playIcon").innerHTML = playing && !s.paused ? PAUSE : PLAY;
+  $("playBtn").disabled = !playing;
+  $("prevBtn").disabled = idx < 0 || (idx === 0 && !s.loop);
+  $("nextBtn").disabled = idx < 0 || (idx >= queue.length - 1 && !s.loop);
+
+  if (!volDragging && s.volume != null) {
+    $("volume").value = Math.round(s.volume);
+    $("volLabel").textContent = Math.round(s.volume);
+  }
+  $("loopBtn").setAttribute("aria-pressed", String(!!s.loop));
+  $("shuffleBtn").disabled = queue.length < 2;
+
+  $("qCount").textContent = queue.length ? `· ${queue.length}` : "";
+  $("qEmpty").hidden = queue.length > 0;
+  const list = $("queue");
+  list.replaceChildren(...queue.map((q, i) => {
+    const li = document.createElement("li");
+    if (q.current) li.className = "current";
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = i + 1;
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = q.title;
+    t.title = q.url;
+    t.onclick = () => send("jump", { index: i });
+    const rm = document.createElement("button");
+    rm.textContent = "Remove";
+    rm.setAttribute("aria-label", `Remove track ${i + 1}`);
+    rm.onclick = () => send("remove", { index: i });
+    li.append(n, t, rm);
+    return li;
+  }));
+}
+
+$("startBtn").onclick = () => send("start", { video: $("videoMode").checked });
+$("playBtn").onclick = () => send("toggle");
+$("prevBtn").onclick = () => send("prev");
+$("nextBtn").onclick = () => send("next");
+$("shuffleBtn").onclick = () => send("shuffle");
+$("loopBtn").onclick = () => send("loop", { on: !state.loop });
+$("clearBtn").onclick = () => send("clear");
+$("stopBtn").onclick = () => { if (confirm("Stop the player and clear the queue?")) send("stop"); };
+
+$("seek").oninput = (e) => { seeking = true; $("pos").textContent = fmt(+e.target.value); };
+$("seek").onchange = async (e) => { await send("seek", { seconds: +e.target.value }); seeking = false; };
+
+let volTimer;
+$("volume").oninput = (e) => {
+  volDragging = true;
+  $("volLabel").textContent = e.target.value;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(() => send("volume", { level: +e.target.value }), 120);
+};
+$("volume").onchange = () => { volDragging = false; };
+
+$("addForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const urls = $("urls").value.split(/\s+/).filter(Boolean);
+  if (!urls.length) return toast("Paste at least one link.");
+  if (!state.running && $("videoMode").checked) await send("start", { video: true });
+  $("addBtn").disabled = true;
+  if (await send("add", { urls })) {
+    $("urls").value = "";
+    toast(`Added ${urls.length} video${urls.length > 1 ? "s" : ""}.`);
+  }
+  $("addBtn").disabled = false;
+};
+
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

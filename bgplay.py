@@ -18,6 +18,7 @@ Usage:
     bgplay.py list
     bgplay.py clear
     bgplay.py stop                    quit the player
+    bgplay.py web [--port N]          open the web control page
 
 Environment:
     BGPLAY_DIR       where the socket and log live (default ~/.bgplay)
@@ -201,6 +202,12 @@ def main():
     p = sub.add_parser("loop", help="loop the whole queue")
     p.add_argument("mode", choices=["on", "off"])
 
+    p = sub.add_parser("web", help="open the web control page")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="address to listen on (default: this computer only)")
+    p.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
+
     for name in ("pause", "resume", "toggle", "next", "prev", "shuffle",
                  "status", "list", "clear", "stop"):
         sub.add_parser(name)
@@ -208,7 +215,10 @@ def main():
     args = parser.parse_args()
 
     try:
-        if args.cmd == "start":
+        if args.cmd == "web":
+            import bgplay_web
+            bgplay_web.serve(args.host, args.port, not args.no_browser)
+        elif args.cmd == "start":
             start(args.video, args.volume)
         elif args.cmd == "add":
             add(args.urls)
